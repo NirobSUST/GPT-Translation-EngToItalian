@@ -7,6 +7,9 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader, random_split
 from torch.optim.lr_scheduler import LambdaLR
+import nltk
+from nltk.translate.bleu_score import corpus_bleu, SmoothingFunction
+nltk.download('punkt')
 
 import warnings
 from tqdm import tqdm
@@ -54,18 +57,31 @@ def greedy_decode(model, source, source_mask, tokenizer_src, tokenizer_tgt, max_
     return decoder_input.squeeze(0)
 
 
-def calculate_accuracy(actual_values, predicted_values):
-    total_samples = len(actual_values)
-    correct_predictions = 0
+# def calculate_accuracy(actual_values, predicted_values):
+#     total_samples = len(actual_values)
+#     correct_predictions = 0
 
-    for actual, predicted in zip(actual_values, predicted_values):
-        if actual == predicted:
-            correct_predictions += 1
+#     for actual, predicted in zip(actual_values, predicted_values):
+#         if actual == predicted:
+#             correct_predictions += 1
 
-    accuracy = correct_predictions / total_samples * 100
-    return accuracy
+#     accuracy = correct_predictions / total_samples * 100
+#     return accuracy
 
+def calculate_bleu_score(target_sentences, predicted_sentences):
+    # Tokenize sentences into words
+    target_tokenized = [nltk.word_tokenize(sentence) for sentence in target_sentences]
+    predicted_tokenized = [nltk.word_tokenize(sentence) for sentence in predicted_sentences]
 
+    # Convert tokenized sentences into the required format for corpus_bleu
+    references = [[target] for target in target_tokenized]
+    predictions = predicted_tokenized
+
+    # Calculate BLEU score with 4-gram smoothing and brevity penalty
+    smoothie = SmoothingFunction().method4
+    bleu_score = corpus_bleu(references, predictions, smoothing_function=smoothie)
+
+    return bleu_score
 
 
 def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, device, print_msg, global_step, writer, num_examples=2):
@@ -111,7 +127,7 @@ def run_validation(model, validation_ds, tokenizer_src, tokenizer_tgt, max_len, 
             print_msg(f"{f'TARGET: ':>12}{target_text}")
             print_msg(f"{f'PREDICTED: ':>12}{model_out_text}")
 
-            accuracy = calculate_accuracy(target_text, model_out_text)
+            accuracy = calculate_bleu_score(target_text, model_out_text)
 
             print(f"Accuracy: {accuracy:.2f}%")
 
